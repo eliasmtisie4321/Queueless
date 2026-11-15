@@ -4,7 +4,8 @@
 const RESEND_URL = 'https://api.resend.com/emails'
 
 /**
- * @param {{ to: string, subject: string, text: string, html?: string }} message
+ * @param {{ to: string, subject: string, text: string, html?: string, ref?: string }} message
+ *   `ref` (e.g. "basket <id>") is only used in logs and is not sent.
  * @param {{ apiKey?: string, from?: string, fetch?: typeof fetch, log?: (line: string) => void }} [options]
  *   Defaults come from RESEND_API_KEY and EMAIL_FROM; tests pass their own.
  * @returns {Promise<string|null>} Resend's email id, or null when it only logged.
@@ -18,8 +19,12 @@ export async function sendEmail(message, options = {}) {
   } = options
 
   if (!apiKey) {
-    log(`[email] RESEND_API_KEY not set, not sending to ${message.to}: ${message.subject}`)
+    // Never log the recipient's address (POPIA): logs on the host are stored.
+    log(`[email] RESEND_API_KEY not set, not sending (${message.ref ?? 'no ref'}): ${message.subject}`)
     return null
+  }
+  if (!from) {
+    throw new Error('EMAIL_FROM is not set, so Resend would reject every email. Add it to server/.env')
   }
 
   const res = await doFetch(RESEND_URL, {

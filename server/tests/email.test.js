@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sendEmail } from '../src/lib/email.js'
 
-const message = { to: 'joy@example.com', subject: 'Hello', text: 'Hi', html: '<p>Hi</p>' }
+const message = { to: 'joy@example.com', subject: 'Hello', text: 'Hi', html: '<p>Hi</p>', ref: 'basket b1' }
 
 test('sends through the Resend API with the key and sender', async () => {
   const calls = []
@@ -39,7 +39,9 @@ test('with no API key (development), it logs instead of sending', async () => {
 
   assert.equal(id, null)
   assert.equal(called, false)
-  assert.match(logs[0], /joy@example\.com/)
+  // POPIA: logs name the basket, never the recipient's email address
+  assert.match(logs[0], /basket b1/)
+  assert.doesNotMatch(logs[0], /joy@example\.com/)
 })
 
 test('a Resend error is thrown with its message', async () => {
@@ -48,4 +50,13 @@ test('a Resend error is thrown with its message', async () => {
     sendEmail(message, { apiKey: 're_test', from: 'x', fetch: fakeFetch }),
     /Resend 422: Invalid from address/,
   )
+})
+
+test('with an API key but no sender address, it fails early with a clear message', async () => {
+  let called = false
+  await assert.rejects(
+    sendEmail(message, { apiKey: 're_test', from: '', fetch: async () => { called = true } }),
+    /EMAIL_FROM is not set/,
+  )
+  assert.equal(called, false)
 })
