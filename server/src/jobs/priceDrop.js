@@ -56,11 +56,13 @@ export async function runPriceDropCheck({ getActiveBaskets, saveLastTotal, sendE
     // No store carries the whole basket: nothing to compare, keep the last total.
     if (!basket.cheapest) continue
 
-    const { dropped, diffCents } = checkPriceDrop(basket.lastTotalCents, basket.cheapest.totalCents)
+    const current = basket.cheapest.totalCents
+    const { dropped, diffCents } = checkPriceDrop(basket.lastTotalCents, current)
     if (dropped) {
       try {
         await sendEmail({
           to: basket.email,
+          ref: `basket ${basket.basketId}`, // for logs: never log the email address (POPIA)
           ...priceDropEmail({ diffCents, storeName: basket.cheapest.storeName, appUrl }),
         })
         emailed += 1
@@ -71,7 +73,14 @@ export async function runPriceDropCheck({ getActiveBaskets, saveLastTotal, sendE
         continue
       }
     }
-    await saveLastTotal(basket.basketId, basket.cheapest.totalCents)
+
+    // The saved total means "the price when we last told you". Only move it after an email,
+    // on the first check, or when prices go UP; small drops keep the old total, so a slow
+    // fall (5% a day) still adds up and triggers an email once it passes 10%.
+    const firstCheck = !(basket.lastTotalCents > 0)
+    if (dropped || firstCheck || current > basket.lastTotalCents) {
+      await saveLastTotal(basket.basketId, current)
+    }
   }
 
   return { checked: baskets.length, emailed, failed }

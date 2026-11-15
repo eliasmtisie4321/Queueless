@@ -60,7 +60,7 @@ function fakeDeps(baskets, { failEmailFor = [] } = {}) {
 
 const shoprite = { storeName: 'Shoprite Hatfield' }
 
-test('the job emails only baskets that dropped by more than 10%, and saves every new total', async () => {
+test('the job emails only baskets that dropped by more than 10%; small drops keep the old total', async () => {
   const { deps, saved, sent } = fakeDeps([
     { basketId: 'b1', email: 'joy@example.com', lastTotalCents: 10000, cheapest: { ...shoprite, totalCents: 8000 } },
     { basketId: 'b2', email: 'sam@example.com', lastTotalCents: 10000, cheapest: { ...shoprite, totalCents: 9800 } },
@@ -73,7 +73,9 @@ test('the job emails only baskets that dropped by more than 10%, and saves every
   assert.equal(sent.length, 1)
   assert.equal(sent[0].to, 'joy@example.com')
   assert.match(sent[0].subject, /now R20\.00 cheaper at Shoprite Hatfield/)
-  assert.deepEqual(saved, [['b1', 8000], ['b2', 9800], ['b3', 5000]])
+  assert.equal(sent[0].ref, 'basket b1') // basket id for logs, never the email address
+  // b1 was emailed, b3 had no total yet; b2's small drop keeps comparing against R100.00
+  assert.deepEqual(saved, [['b1', 8000], ['b3', 5000]])
 })
 
 test('a basket with no complete store is skipped and keeps its last total', async () => {
@@ -97,4 +99,36 @@ test('if an email fails, the total is not saved, so the next run tries again; ot
   assert.deepEqual(await runPriceDropCheck(deps), { checked: 2, emailed: 1, failed: 1 })
   assert.deepEqual(sent.map((e) => e.to), ['joy@example.com'])
   assert.deepEqual(saved, [['b2', 8000]])
+})
+
+test('a gradual drop still triggers an email (R100 falling 5% a day, from #30 review)', async () => {
+  let lastTotalCents = 10000
+  const emailsByDay = []
+  for (let day = 1; day <= 5; day++) {
+    const totalCents = Math.round(10000 * 0.95 ** day) // R95.00, R90.25, R85.74, R81.45, R77.38
+    const sent = []
+    await runPriceDropCheck({
+      appUrl: 'https://q.example',
+      getActiveBaskets: async () => [
+        { basketId: 'b1', email: 'joy@example.com', lastTotalCents, cheapest: { ...shoprite, totalCents } },
+      ],
+      saveLastTotal: async (_id, cents) => {
+        lastTotalCents = cents
+      },
+      sendEmail: async (email) => sent.push(email),
+    })
+    emailsByDay.push(sent.length)
+  }
+  // Day 3 is 14.26% below the R100.00 the shopper started with
+  assert.deepEqual(emailsByDay, [0, 0, 1, 0, 0])
+  assert.equal(lastTotalCents, 8574) // "cheaper than when we last told you"
+})
+
+test('a price rise is saved, so later drops are measured from the higher price', async () => {
+  const { deps, saved, sent } = fakeDeps([
+    { basketId: 'b1', email: 'joy@example.com', lastTotalCents: 10000, cheapest: { ...shoprite, totalCents: 12000 } },
+  ])
+  assert.deepEqual(await runPriceDropCheck(deps), { checked: 1, emailed: 0, failed: 0 })
+  assert.equal(sent.length, 0)
+  assert.deepEqual(saved, [['b1', 12000]])
 })
