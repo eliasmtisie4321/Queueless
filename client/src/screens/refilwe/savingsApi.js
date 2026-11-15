@@ -1,18 +1,23 @@
 // Calls for S6. Plan §7: delete account is POST /api/account/delete; log out is supabase signOut().
 import { api, ApiError } from '../../lib/api.js'
-import { supabase } from '../../lib/supabase.js'
+import { messages } from '../../lib/messages.js'
+import { isDev, supabase } from '../../lib/supabase.js'
 import { sampleSavings } from './sampleSavings.js'
 
 /**
- * GET /api/me/savings. Until Supabase is set up, or while the route isn't built yet (404),
- * the screen shows the sample shopper so it can be built and checked against the designs.
+ * GET /api/me/savings. In development only, the sample shopper stands in until Supabase is set up
+ * or while the route isn't built yet (404). On the live site it never does, so made-up savings
+ * can't look like real data: the screen shows its error state instead.
  */
 export async function fetchSavings() {
-  if (!supabase) return sampleSavings
+  if (!supabase) {
+    if (isDev) return sampleSavings
+    throw new ApiError(messages.serverError, 0, 'NOT_CONFIGURED')
+  }
   try {
     return await api('/me/savings')
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) return sampleSavings
+    if (isDev && error instanceof ApiError && error.status === 404) return sampleSavings
     throw error
   }
 }
