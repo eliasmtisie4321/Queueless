@@ -1,8 +1,7 @@
 // GET /api/me/savings (#20): everything the Savings dashboard (S6) shows for the logged-in user.
 // Response shape = client/src/screens/refilwe/sampleSavings.js, so S6 needs no changes.
 //
-// The log-in check is passed in. Once requireUser exists (#14), mount it with one line in index.js:
-//   app.use('/api', createSavingsRouter({ requireUser }))
+// The log-in check (requireUser, #14) is passed in from server/src/app.js, so tests can pass a fake.
 import { Router } from 'express'
 import { supabase } from '../lib/supabase.js'
 

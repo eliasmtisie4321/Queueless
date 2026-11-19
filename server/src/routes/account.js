@@ -3,8 +3,7 @@
 // (migration account_deletion) then deletes the account and its data, within the 7 days the PRD allows.
 // The client logs the user out straight after (client/src/screens/refilwe/savingsApi.js).
 //
-// The log-in check is passed in. Once requireUser exists (#14), mount it in server/src/app.js:
-//   app.use('/api', createAccountRouter({ requireUser }))
+// The log-in check (requireUser, #14) is passed in from server/src/app.js, so tests can pass a fake.
 import { Router } from 'express'
 import { supabase } from '../lib/supabase.js'
 

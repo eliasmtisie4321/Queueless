@@ -85,6 +85,18 @@ test('GET is not allowed: deleting needs a POST', async () => {
   }
 })
 
+test('the real app answers POST /api/account/delete with 401 when there is no token', async () => {
+  const { default: app } = await import('../src/app.js')
+  const server = app.listen(0)
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/account/delete`, { method: 'POST' })
+    assert.equal(res.status, 401)
+    assert.equal((await res.json()).code, 'UNAUTHORIZED')
+  } finally {
+    server.close()
+  }
+})
+
 test('a failure returns the standard message without leaking details', async () => {
   const res = await call(
     createAccountRouter({
