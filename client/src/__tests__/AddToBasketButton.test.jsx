@@ -1,17 +1,21 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AddToBasketButton from '../components/domain/AddToBasketButton.jsx'
 import GlobalHeader from '../components/layout/GlobalHeader.jsx'
 import * as basketHook from '../hooks/useBasket.js'
 
 function renderButton() {
+  // The header reads notifications through react-query, as it does inside the app (main.jsx).
   return render(
-    <MemoryRouter>
-      <GlobalHeader />
-      <AddToBasketButton productId="sample-milk" productName="Clover Full Cream Milk 2L" />
-      <AddToBasketButton productId="sample-bread" productName="Albany Superior White Bread 700g" />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <GlobalHeader />
+        <AddToBasketButton productId="sample-milk" productName="Clover Full Cream Milk 2L" />
+        <AddToBasketButton productId="sample-bread" productName="Albany Superior White Bread 700g" />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

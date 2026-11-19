@@ -4,6 +4,7 @@ import DesktopNav from './DesktopNav.jsx'
 import Logo from './Logo.jsx'
 import { isAuthPath } from './navItems.js'
 import { useBasketCount } from '../../hooks/useBasketCount.js'
+import { useNotifications } from '../../screens/refilwe/useNotifications.js'
 
 const iconButton =
   'relative inline-flex size-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-raised hover:text-primary'
@@ -16,6 +17,7 @@ export default function GlobalHeader() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const basketCount = useBasketCount()
+  const unreadCount = useNotifications().unread.length
   const isHome = pathname === '/'
   const authScreen = isAuthPath(pathname)
 
@@ -42,8 +44,22 @@ export default function GlobalHeader() {
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {!authScreen && (
-            <Link to="/savings" aria-label="Your profile and savings" className={iconButton}>
+            <Link
+              to="/savings"
+              aria-label={
+                unreadCount > 0
+                  ? `Your profile and savings, ${unreadCount} new ${unreadCount === 1 ? 'notification' : 'notifications'}`
+                  : 'Your profile and savings'
+              }
+              className={iconButton}
+            >
               <User aria-hidden="true" className="size-6" />
+              {unreadCount > 0 && (
+                <span
+                  data-testid="unread-dot"
+                  className="absolute top-1.5 right-1.5 size-2.5 rounded-full border-2 border-bg bg-savings"
+                />
+              )}
             </Link>
           )}
           <Link
