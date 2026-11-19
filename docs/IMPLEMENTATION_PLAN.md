@@ -29,7 +29,7 @@ The PRD and the Stitch designs leave these open. This plan uses the **Proposed d
 | D11 | **Per-account lockout** (5 wrong passwords → 15 min) is not built into Supabase Auth. | PRD §5 | **Cut from scope (19 Nov 2026, mentor review).** Log-in uses Supabase's built-in `signInWithPassword` directly from the client, with Supabase Auth's own rate limiting. The `login_attempts` table from the schema migration stays unused. |
 | D12 | PRD says **Jest 29.7**. Vite projects normally use Vitest. | PRD §11.1 | Use **Jest 29.7** as the PRD says (with `babel-jest`), in both workspaces. |
 | D13 | Libraries the PRD doesn't name but the app needs. | — | Client: `react-router` v7 (routes), `@tanstack/react-query` v5 + persister (caching and offline), `lucide-react` (icons). Server: `resend` (email), `node-cron` (scheduled emails). Nothing else. |
-| D14 | PRD §11.1 says "Supabase JS client, no custom middleware", but the repo has an **Express API** (`server/`). | PRD §11.1, README | Keep both. The **client** reads data directly from Supabase (anon key + RLS). The **server** handles only what needs a secret or a schedule: login lockout, account deletion, emails, scheduled jobs. Business rules that protect data (BR2, verification) live in the **database**, so they hold no matter which path writes. |
+| D14 | PRD §11.1 says "Supabase JS client, no custom middleware", but the repo has an **Express API** (`server/`). | PRD §11.1, README | Keep both. The **client** reads data directly from Supabase (anon key + RLS). The **server** handles only what needs a secret or a schedule: account deletion, emails, scheduled jobs. Business rules that protect data (BR2, verification) live in the **database**, so they hold no matter which path writes. |
 | D15 | PRD says **Vercel**, but the Express server serves `client/dist` in production (one Node service). Hosting is still TODO in the README. | PRD §11.1, README | Host the API + built client as **one Node service** (e.g. Render or Railway) and the database on Supabase. Tech Lead to confirm. |
 | D16 | PRD says **PostgreSQL 16**; `supabase/config.toml` uses **17**. | PRD §11.1 | Use 17 (the Supabase default). Update the PRD. |
 
@@ -262,7 +262,7 @@ create table notifications (      -- PRD §4.5 in-app
   created_at timestamptz not null default now()
 );
 
-create table login_attempts (     -- D11 (cut: table exists but is unused)
+create table login_attempts (     -- D11 (cut: no lockout; only the account purge clears it)
   email text primary key,
   failed_count int not null default 0,
   locked_until timestamptz
@@ -680,7 +680,7 @@ Every phase ends with an app that runs (`npm run dev` starts client and API) and
 | BR4 | Weights: 0 min = 0.8, 15 min = 0.8, 67.5 min = 0.4, 120 min = 0; no reports → Unknown | Automated (Jest + SQL) |
 | Validation | Password rules; price `34.99` valid, `34.999`, `-1`, `abc` invalid | Automated (Jest) |
 | Format | `R1,234.50`, `12 Mar 2026`, `14:05` SAST | Automated (Jest) |
-| Auth | Lockout after 5; reset link 1 h; unverified cannot write | Manual |
+| Auth | Wrong password shows "Incorrect email or password."; reset link 1 h; unverified cannot write | Manual |
 | Edge cases (PRD §6.2) | Missing price, location mismatch, live price update, session expiry mid-edit | Manual |
 | Quality (PRD §12.1) | Speed, offline, devices, locale, accessibility | Manual (Phase 8) |
 

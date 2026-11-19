@@ -33,19 +33,54 @@
   * **Database:** PostgreSQL (Relational index pairing for products, listings, and user records)
   * **Log-in & Storage:** Supabase Auth and Storage Buckets
 
+---
 
+## 3. Goals, success metrics and non-goals
 
+### 3.1 Goals
+Each goal maps to a quantitative target value that can be validated via system event logging counters or controlled group testing sweeps.
 
-| BR2 | Report Throttling Lockout: A user is restricted to a maximum of 5 queue updates and 3 price changes per store branch within any single 60-minute window to avoid data spamming. | F3, S5 |
-| BR3 | Basket Consolidation Rule: If a particular store branch does not carry a specific item present within a user’s current multi-item basket, the overall total screen must flag that store with "Missing 1 Item" and calculate aggregate sums based strictly on the available inventory set. | F2, S4 |
-| BR4 | Queue Decay Weighting: The displayed live queue level indicator is calculated using a time-weighted average where user reports submitted within the last 15 minutes hold 80% weight, decreasing linearly to 0% weight over 2 hours. | F1, F3, S3 |
+| # | Goal | Metric (what you count) | Target | How you will check it |
+| :--- | :--- | :--- | :--- | :--- |
+| **G1** | Accelerate user product lookup performance | Time elapsed from hitting the submission trigger to rendering matched results inline. | Under 2.0 seconds | Automated client-side telemetry using standard browser performance monitoring hooks. |
+| **G2** | Maximize user community engagement indices | Percentage of active registered shoppers who submit at least 2 crowd-sourced reports monthly. | 40% of unique profiles | Database metrics aggregated from the `ReportLog` transaction tables. |
+| **G3** | Deliver clear, measurable consumer savings | Aggregated price margin gap between targeted cheapest store basket vs worst-case retail alternatives. | Average R150 saved monthly per shopper | Automated script comparison matching checked basket histories against baseline matrix highs. |
 
+### 3.2 Non-goals
+* **No dynamic routing or map visuals**: To minimize cellular data package overheads on low-tier smartphones, the app handles location sorting via simple suburban pick-lists and static distance text blocks rather than heavy embedded map APIs.
+* **No internal payment settlement structures**: Queueless does not process commercial transaction checkouts or coordinate fulfillment logistics; it acts completely as a physical pre-trip planning utility guide.
+* **No automatic receipt optical recognition**: Community price contributions run on simple numerical input keypads instead of machine-learning image processing routines.
 
+---
 
+## 4. Features, business rules and notifications
 
+### 4.1 Feature list
 
+| ID | Feature name | What the user can do (list every action) | Priority | Goal (G#) | Stories (US#) | Screens (S#) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **F1** | Product Search & Price Compare | Look up items via name keywords; browse matching catalog items; check real-time price variances ranked lowest-first. | Must | G1 | US1 | S1, S2, S3 |
+| **F2** | Cross-Store Basket Aggregator | Build a virtual product checklist; analyze aggregated gross total costs side-by-side across nearby competing branches. | Must | G3 | US2 | S2, S4 |
+| **F3** | Crowd-sourced Queue Level Reporter | Tap a physical branch storefront profile; choose a checkout congestion level bucket; instantly transmit update entries. | Must | G2 | US3 | S3, S5 |
+| **F4** | Suburb Filter Settings | Choose a specific local shopping suburb to ground product price fields within a relevant geographic area. | Should | G1 | US4 | S1, S2 |
+| **F5** | Savings Log Dashboard | Inspect rolling monthly financial performance summaries and track accumulated points tallies on a personalized profile grid. | Should | G3 | US5 | S6 |
 
+### 4.2 MVP definition
+A responsive web application enabling consumers to search for a product catalog item, compare local prices across at least 3 nearby physical stores, compile items inside an aggregate basket list to locate the lowest-cost gross checkout destination, and submit a 1-tap update on live line wait time intervals.
 
+### 4.3 Future features
+* Built-in client-side barcode scanning utility utilizing native smartphone camera feeds.
+* Conversational interactive WhatsApp integration bot for immediate remote pricing inquiries.
+* Watchlist trigger alerts dispatching push updates when monitored staple items experience a localized drop of more than 15%.
+
+### 4.4 Business rules
+
+| ID | Rule (exact logic, numbers and limits) | Used by (F#, S#) |
+| :--- | :--- | :--- |
+| **BR1** | **Price Age Warning Flag**: Any indexed product price mapping that has not received a verified refresh statement for over 48 hours must inject an amber caution exclamation badge reading: `"Unverified for 2 days"`. | F1, S2, S3 |
+| **BR2** | **Reporter Throttling Caps**: To block data spam loops, a single shopper profile is limited to a maximum threshold of 5 checkout queue entries and 3 item price updates per physical store location inside a rolling 60-minute window. | F3, S5 |
+| **BR3** | **Incomplete Basket Penalty Mitigation**: If a competitive retail outlet does not stock a specific item included in a user's multi-product composite basket, the aggregator component must flag that row panel with `"Missing 1 Item"`, computing sums strictly across its available intersection set. | F2, S4 |
+| **BR4** | **Queue Metric Time Decay Weighting**: The public store checkout queue marker status calculates automatically via a time-weighted database formula where shopper updates submitted within the last 15 minutes hold an 80% weight coefficient, decaying down linearly to 0% weight over a 2-hour window. | F1, F3, S3 |
 
 ### 4.5 Notifications
 
@@ -388,55 +423,6 @@ Queueless processes and stores user data tokens in accordance with South Africa'
 | **M3: MASTER.md ready**| Structural step-by-step deployment instructions checklist verified against development scope definitions. | `MASTER.md` | 04 Dec 2026 |
 | **M4: MVP built** | Core multi-store aggregation search algorithms and basket cost evaluators fully operational on test networks. | Production platform link | 08 Jan 2027 |
 | **M5: Tested and demoed**| Quality tracking matrices pass manual inspection checklist steps, concluding final deliverable audits. | Testing checklist link | 22 Jan 2027 |
-
----
-
-## 3. Goals, success metrics and non-goals
-
-### 3.1 Goals
-Each goal maps to a quantitative target value that can be validated via system event logging counters or controlled group testing sweeps.
-
-| # | Goal | Metric (what you count) | Target | How you will check it |
-| :--- | :--- | :--- | :--- | :--- |
-| **G1** | Accelerate user product lookup performance | Time elapsed from hitting the submission trigger to rendering matched results inline. | Under 2.0 seconds | Automated client-side telemetry using standard browser performance monitoring hooks. |
-| **G2** | Maximize user community engagement indices | Percentage of active registered shoppers who submit at least 2 crowd-sourced reports monthly. | 40% of unique profiles | Database metrics aggregated from the `ReportLog` transaction tables. |
-| **G3** | Deliver clear, measurable consumer savings | Aggregated price margin gap between targeted cheapest store basket vs worst-case retail alternatives. | Average R150 saved monthly per shopper | Automated script comparison matching checked basket histories against baseline matrix highs. |
-
-### 3.2 Non-goals
-* **No dynamic routing or map visuals**: To minimize cellular data package overheads on low-tier smartphones, the app handles location sorting via simple suburban pick-lists and static distance text blocks rather than heavy embedded map APIs.
-* **No internal payment settlement structures**: Queueless does not process commercial transaction checkouts or coordinate fulfillment logistics; it acts completely as a physical pre-trip planning utility guide.
-* **No automatic receipt optical recognition**: Community price contributions run on simple numerical input keypads instead of machine-learning image processing routines.
-
----
-
-## 4. Features, business rules and notifications
-
-### 4.1 Feature list
-
-| ID | Feature name | What the user can do (list every action) | Priority | Goal (G#) | Stories (US#) | Screens (S#) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **F1** | Product Search & Price Compare | Look up items via name keywords; browse matching catalog items; check real-time price variances ranked lowest-first. | Must | G1 | US1 | S1, S2, S3 |
-| **F2** | Cross-Store Basket Aggregator | Build a virtual product checklist; analyze aggregated gross total costs side-by-side across nearby competing branches. | Must | G3 | US2 | S2, S4 |
-| **F3** | Crowd-sourced Queue Level Reporter | Tap a physical branch storefront profile; choose a checkout congestion level bucket; instantly transmit update entries. | Must | G2 | US3 | S3, S5 |
-| **F4** | Suburb Filter Settings | Choose a specific local shopping suburb to ground product price fields within a relevant geographic area. | Should | G1 | US4 | S1, S2 |
-| **F5** | Savings Log Dashboard | Inspect rolling monthly financial performance summaries and track accumulated points tallies on a personalized profile grid. | Should | G3 | US5 | S6 |
-
-### 4.2 MVP definition
-A responsive web application enabling consumers to search for a product catalog item, compare local prices across at least 3 nearby physical stores, compile items inside an aggregate basket list to locate the lowest-cost gross checkout destination, and submit a 1-tap update on live line wait time intervals.
-
-### 4.3 Future features
-* Built-in client-side barcode scanning utility utilizing native smartphone camera feeds.
-* Conversational interactive WhatsApp integration bot for immediate remote pricing inquiries.
-* Watchlist trigger alerts dispatching push updates when monitored staple items experience a localized drop of more than 15%.
-
-### 4.4 Business rules
-
-| ID | Rule (exact logic, numbers and limits) | Used by (F#, S#) |
-| :--- | :--- | :--- |
-| **BR1** | **Price Age Warning Flag**: Any indexed product price mapping that has not received a verified refresh statement for over 48 hours must inject an amber caution exclamation badge reading: `"Unverified for 2 days"`. | F1, S2, S3 |
-| **BR2** | **Reporter Throttling Caps**: To block data spam loops, a single shopper profile is limited to a maximum threshold of 5 checkout queue entries and 3 item price updates per physical store location inside a rolling 60-minute window. | F3, S5 |
-| **BR3** | **Incomplete Basket Penalty Mitigation**: If a competitive retail outlet does not stock a specific item included in a user's multi-product composite basket, the aggregator component must flag that row panel with `"Missing 1 Item"`, computing sums strictly across its available intersection set. | F2, S4 |
-| **BR4** | **Queue Metric Time Decay Weighting**: The public store checkout queue marker status calculates automatically via a time-weighted database formula where shopper updates submitted within the last 15 minutes hold an 80% weight coefficient, decaying down linearly to 0% weight weight over a 2-hour window. | F1, F3, S3 |
 
 ---
 

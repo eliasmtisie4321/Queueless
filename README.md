@@ -94,7 +94,7 @@ Queueless/
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20.19+ (built and tested on 22)
-- Access to the team's hosted Supabase project (ask the Tech Lead). We don't run Supabase locally, so Docker is **not** needed
+- Access to the team's hosted Supabase project (ask the Tech Lead). We don't run Supabase locally. [Docker](https://www.docker.com/) is only needed for `npm run db:test`
 - Git
 
 ### 1. Install
@@ -124,7 +124,7 @@ Find the values under **Supabase Dashboard → Project Settings → API**, or as
 
 ### 3. Database: migrations & seed
 
-We use **one shared hosted Supabase project** (no local database, no Docker). Every database change is a migration file merged through a PR; never edit tables by hand in the dashboard.
+We use **one shared hosted Supabase project** (no local database). Every database change is a migration file merged through a PR; never edit tables by hand in the dashboard.
 
 ```bash
 npm run db:link -- --project-ref <project-ref>   # once per computer (Tech Lead shares the ref)
@@ -137,7 +137,7 @@ After a migration PR is **merged into main**, the Tech Lead applies it:
 ```bash
 npm run db:push      # apply new migrations to the hosted project
 npm run db:seed      # apply migrations and load supabase/seed.sql
-npm run db:test      # run the database tests in supabase/tests/ against the hosted project
+npm run db:test      # run the database tests in supabase/tests/ against the hosted project (needs Docker)
 ```
 
 | Command | Description |
@@ -147,7 +147,7 @@ npm run db:test      # run the database tests in supabase/tests/ against the hos
 | `npm run db:check` | Dry run: list migrations that would be applied |
 | `npm run db:push` | Apply new migrations to the hosted project |
 | `npm run db:seed` | Apply migrations and load the seed data |
-| `npm run db:test` | Run the database tests against the hosted project |
+| `npm run db:test` | Run the database tests against the hosted project (needs Docker running) |
 | `npm run db:reset:hosted` | ⚠️ **Wipes the shared database** and rebuilds it from migrations + seed. Tech Lead only, and tell the team first |
 
 The shared database is used by everyone and by the live site, so only push migrations that have been reviewed and merged.
