@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { CircleDollarSign, LogOut, Settings, Shield, TriangleAlert } from 'lucide-react'
@@ -18,9 +18,13 @@ import RecentActivity from './RecentActivity.jsx'
 import SavingsChart from './SavingsChart.jsx'
 import { SavedThisMonth, StatTile } from './SavingsSummary.jsx'
 import { deleteAccount, logOut } from './savingsApi.js'
+import { NotificationMessage } from './NotificationMessage.jsx'
+import { useNotifications } from './useNotifications.js'
 import { isNewUser } from './savingsFormat.js'
 import { savingsText } from './savingsText.js'
 import { useSavings } from './useSavings.js'
+
+const NOTICE_MS = 6000 // long enough to read the verified-report message
 
 const menuItem =
   'flex min-h-12 w-full items-center gap-3 rounded-button border border-border-strong px-4 text-left text-body text-ink transition-colors hover:bg-surface-raised'
@@ -46,6 +50,18 @@ export default function Savings() {
   const [error, setError] = useState(null)
   const closeDialog = useCallback(() => setDialog(null), [])
   const closeError = useCallback(() => setError(null), [])
+
+  // "Report verified" (PRD §4.5): show the newest unread one as the S6 toast, then mark them all read
+  // so the header dot clears and the toast doesn't come back.
+  const { unread, markRead } = useNotifications()
+  const [notice, setNotice] = useState(null)
+  const closeNotice = useCallback(() => setNotice(null), [])
+  const loaded = savings.isSuccess
+  useEffect(() => {
+    if (!loaded || unread.length === 0) return
+    setNotice({ body: unread[0].body, more: unread.length - 1 })
+    markRead(unread.map((n) => n.id)).catch((e) => console.warn(`[notifications] could not mark read: ${e.message}`))
+  }, [loaded, unread, markRead])
 
   async function run(action) {
     setBusy(true)
@@ -177,7 +193,15 @@ export default function Savings() {
         </Dialog>
       )}
 
-      <Toast message={error} tone="error" onClose={closeError} />
+      {error ? (
+        <Toast message={error} tone="error" onClose={closeError} />
+      ) : (
+        <Toast
+          message={notice && <NotificationMessage body={notice.body} more={notice.more} />}
+          onClose={closeNotice}
+          duration={NOTICE_MS}
+        />
+      )}
     </div>
   )
 }
