@@ -29,9 +29,9 @@ We use the Product Requirements Document (PRD) as our single source of truth for
 
 | Name    | GitHub                                                       | Role(s)                        | Main features built |
 | ------- | ------------------------------------------------------------ | ------------------------------ | ------ |
-| Mpho    | [@mpho09](https://github.com/mpho09)                         | Tech Lead, Backend Dev         | Database schema, RLS, seed and RLS tests (#25); Search Results S2 + `search_products()` (#34); live-site sample-data guard (#42); Store Details S3 + BR4 queue view (#45); profile on sign-up trigger (#44, in review) |
+| Mpho    | [@mpho09](https://github.com/mpho09)                         | Tech Lead, Backend Dev         | Database schema, RLS, seed and RLS tests (#25); Search Results S2 + `search_products()` (#34); live-site sample-data guard (#42); Store Details S3 + BR4 queue view (#45); profile created on sign-up (#44) |
 | Joy     | [@jjmolomo17-tech](https://github.com/jjmolomo17-tech)       | Product Owner, Frontend Dev    | Suburb selector on Home (#27) |
-| Refilwe | [@Ref-DevSa](https://github.com/Ref-DevSa)                   | Frontend Dev, Designer         | Frontend foundation + Home S1 (#22); Basket S4 + BR3 totals (#23); Savings S6, savings API, price-drop job, email helper (#28–#33); S6 log-in guard and log out (#48); Delete account route + daily purge job (#47, in review) |
+| Refilwe | [@Ref-DevSa](https://github.com/Ref-DevSa)                   | Frontend Dev, Designer         | Frontend foundation + Home S1 (#22); Basket S4 + BR3 totals (#23); Savings S6, savings API, price-drop rule + email helper (#28–#33); S6 log-in guard (#48); Delete account + daily purge (#47) |
 | Elias   | [@eliasmtisie4321](https://github.com/eliasmtisie4321)       | QA, DevOps                     | Report Submission S5 + Stores list + report rules (#35); Vercel deployment (#37) |
 | Kabelo  | [@kabelomathapo6-lab](https://github.com/kabelomathapo6-lab) | Designer, Frontend Dev         | "Midnight Lagoon" dark design (#36); auth helpers `requireUser`, `useAuth`, `authStore` (#41) |
 
@@ -43,9 +43,9 @@ Status key: ✅ done · 🚧 in progress · ⏸️ cut / deferred
 
 | Feature | Status | Owner |
 | ------- | ------ | ----- |
-| Accounts: log in, sign up, reset, verify (A1–A4, #14) | 🚧 Auth core merged (`authStore`, `useAuth`, `requireUser`, #41); the A1–A4 screens are still placeholders | Kabelo, Mpho |
+| Accounts: log in, sign up, reset, verify (A1–A4, #14) | 🚧 Auth core merged (`authStore`, `useAuth`, `requireUser`, #41); profile created on sign-up (#44); the A1–A4 screens are still placeholders | Kabelo, Mpho |
 | F1 Product search & price compare (S2, #11) | ✅ | Mpho |
-| F1 Store Details with queue status (S3, #12) | ✅ Prices, stock and BR4 queue level (#45) | Mpho |
+| F1 Store Details with queue status (S3, #12) | ✅ Store Details + BR4 queue view (#45) | Mpho |
 | F2 Cross-store basket (S4, #16) | ✅ Guest basket in localStorage | Refilwe |
 | F3 Queue/stock report submission (S5, #18) | ✅ Needs log-in to submit | Elias |
 | Database: schema, RLS, seed (#8) | ✅ | Mpho |
@@ -55,9 +55,8 @@ Status key: ✅ done · 🚧 in progress · ⏸️ cut / deferred
 | Feature | Status | Owner |
 | ------- | ------ | ----- |
 | F4 Suburb filter (#19) | ✅ Selector on Home and Search | Joy |
-| F5 Savings dashboard + savings API (S6, #20) | ✅ Works for logged-in users: `/api/me/savings` is mounted with `requireUser`, and guests are sent to Log in (#48) | Refilwe |
-| Delete account (S6, #20) | 🚧 Route and daily purge job in review (#47) | Refilwe |
-| Price-drop email job (#20) | 🚧 Built and tested, not scheduled yet | Refilwe |
+| F5 Savings dashboard + savings API (S6, #20) | ✅ Screen and `/api/me/savings`, logged-in only (#48); Delete account with a daily purge job (#47) | Refilwe |
+| Price-drop email (#20) | 🚧 Rule and email helper built and tested; not scheduled yet | Refilwe |
 | Per-account lockout (D11) | ⏸️ Cut; Supabase Auth's built-in rate limiting is used | — |
 | Admin / Retailer dashboards (Feature 7) | ⏸️ Deferred (D10) | — |
 
@@ -180,19 +179,19 @@ Test accounts are created on the hosted Supabase project once sign-up is live (#
 
 ## 🧪 Tests
 
-Jest 29 in both workspaces, plus SQL tests for the database.
+Jest 29 for the client, Node's built-in test runner (`node:test`) for the server, and pgTAP SQL tests for the database.
 
 ```bash
-npm test          # all client and server tests (200+ tests)
-npm run db:test   # database tests in supabase/tests/ against the hosted project
+npm test          # all client and server tests (220+ tests)
+npm run db:test   # 108 pgTAP database tests in supabase/tests/
 ```
 
 | Area | What's covered |
 | ---- | -------------- |
 | Client screens | Home, Search Results, Store Details, Basket, Savings (incl. log-in guard and session expiry), Report Submission, Stores list, Suburb selector |
 | Client logic | BR3 basket totals, basket store, price age, distance, validation, formatting, `data.js` live/dev sample-data rules, search API, auth store and `useAuth` |
-| Server | `GET /api/me/savings`, `requireUser` middleware |
-| Database (`supabase/tests/`) | RLS rules, report rules (throttling, verification), savings events, `search_products()`, BR4 `queue_view`; account deletion and purge job (with #47) |
+| Server | `GET /api/me/savings`, `POST /api/account/delete`, `requireUser` middleware and 401s from the real app, price-drop rule, Resend email helper |
+| Database (`supabase/tests/`) | RLS rules, report rules (throttling, verification), savings events, `search_products()`, BR4 queue view, profile created on sign-up, account deletion and the daily purge job |
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every pull request and push to `main`. It checks for leftover merge conflict markers and invalid JSON files.
 
@@ -226,8 +225,7 @@ Design: "Midnight Lagoon" (see [docs/DESIGN_REFRESH.md](docs/DESIGN_REFRESH.md))
 
 ### Known issues
 
-- The Log in and Sign up screens (A1–A4, #14) are still placeholders. The auth core is merged (#41), but nobody can log in on the live site yet, so Reports and Savings can't be used there.
-- Delete account needs #47 (route and daily purge job), which is in review.
+- The log-in helpers are merged (#41), but the A1–A4 screens (Log in, Sign up, Forgot password, Verify email) are still placeholders, so nobody can log in on the live site yet and Reports and Savings can't be used there. When Sign up is built it must send the two required checkboxes, or the sign-up is rejected (#44).
 - The basket is saved in the browser (localStorage) only, not to the account.
 - The price-drop email job is built and tested but not scheduled.
 - CI on `main` only checks for merge conflict markers and valid JSON; real CI (lint, typecheck, test, build) is in PR #38.
