@@ -1,44 +1,94 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import { createAccountRouter, markForDeletion } from '../src/routes/account.js'
+import { createAccountRouter, requestDeletion } from '../src/routes/account.js'
 
-// ── markForDeletion: marks only this user, and only once
+// ── requestDeletion: a small in-memory stand-in for the tables it touches
 
-function fakeDb(answer = { error: null }) {
-  const calls = []
-  return {
-    calls,
-    from(table) {
-      const q = { table, filters: [] }
-      calls.push(q)
-      const chain = {
-        update: (values) => ((q.update = values), chain),
-        eq: (col, val) => (q.filters.push(['eq', col, val]), chain),
-        is: (col, val) => (q.filters.push(['is', col, val]), chain),
-        then: (resolve, reject) => Promise.resolve(answer).then(resolve, reject),
+const NOW = new Date('2026-11-19T10:00:00Z')
+const USER = { id: 'user-1', email: 'Shopper.One@example.com' }
+
+function fakeDb({ profiles = [], loginAttempts = [], failOn } = {}) {
+  const db = {
+    profiles: profiles.map((p) => ({ ...p })),
+    loginAttempts: [...loginAttempts],
+    deletedUsers: [],
+    queries: [],
+  }
+  db.from = (table) => {
+    const q = { table, op: 'select', filters: [] }
+    db.queries.push(q)
+    const matches = (row) =>
+      q.filters.every(([kind, col, val]) => (kind === 'eq' ? row[col] === val : (row[col] ?? null) === val))
+    const run = () => {
+      if (failOn === table) return { data: null, error: { message: 'boom' } }
+      if (table === 'login_attempts') {
+        db.loginAttempts = db.loginAttempts.filter((r) => !matches(r))
+        return { error: null }
       }
-      return chain
+      const rows = db.profiles.filter(matches)
+      if (q.op === 'update') {
+        rows.forEach((r) => Object.assign(r, q.values))
+        return { data: rows.map((r) => ({ id: r.id })), error: null }
+      }
+      return { data: rows[0] ? { id: rows[0].id } : null, error: null }
+    }
+    const chain = {
+      update: (values) => ((q.op = 'update'), (q.values = values), chain),
+      delete: () => ((q.op = 'delete'), chain),
+      select: () => chain,
+      eq: (col, val) => (q.filters.push(['eq', col, val]), chain),
+      is: (col, val) => (q.filters.push(['is', col, val]), chain),
+      maybeSingle: () => chain,
+      then: (resolve, reject) => Promise.resolve().then(run).then(resolve, reject),
+    }
+    return chain
+  }
+  db.auth = {
+    admin: {
+      deleteUser: async (id) => {
+        if (failOn === 'auth') return { error: { message: 'auth down' } }
+        db.deletedUsers.push(id)
+        return { error: null }
+      },
     },
   }
+  return db
 }
 
-test('marks the user\'s own profile with the request time, and keeps the first request', async () => {
-  const db = fakeDb()
-  await markForDeletion(db, 'user-1', new Date('2026-11-17T10:00:00Z'))
+test('a user with a profile is marked with the request time and scheduled, nothing deleted yet', async () => {
+  const db = fakeDb({ profiles: [{ id: 'user-1' }, { id: 'user-2' }] })
 
-  assert.equal(db.calls.length, 1)
-  const [q] = db.calls
-  assert.equal(q.table, 'profiles')
-  assert.deepEqual(q.update, { deletion_requested_at: '2026-11-17T10:00:00.000Z' })
-  assert.deepEqual(q.filters, [
-    ['eq', 'id', 'user-1'],
-    ['is', 'deletion_requested_at', null],
-  ])
+  assert.equal(await requestDeletion(db, USER, NOW), 'scheduled')
+
+  assert.equal(db.profiles[0].deletion_requested_at, '2026-11-19T10:00:00.000Z')
+  assert.equal(db.profiles[1].deletion_requested_at, undefined, 'other users are untouched')
+  assert.deepEqual(db.deletedUsers, [])
+  assert.deepEqual(db.queries[0].filters[0], ['eq', 'id', 'user-1'], 'the update is filtered to this user')
 })
 
-test('a database error is thrown, not hidden', async () => {
-  await assert.rejects(markForDeletion(fakeDb({ error: { message: 'boom' } }), 'user-1'), /boom/)
+test('asking twice keeps the first request time', async () => {
+  const db = fakeDb({ profiles: [{ id: 'user-1', deletion_requested_at: '2026-11-18T08:00:00.000Z' }] })
+
+  assert.equal(await requestDeletion(db, USER, NOW), 'scheduled')
+
+  assert.equal(db.profiles[0].deletion_requested_at, '2026-11-18T08:00:00.000Z')
+  assert.deepEqual(db.deletedUsers, [])
+})
+
+test('no profile row: the purge job would never find them, so they are deleted straight away (review of #47)', async () => {
+  const db = fakeDb({ loginAttempts: [{ email: 'shopper.one@example.com' }, { email: 'someone.else@example.com' }] })
+
+  assert.equal(await requestDeletion(db, USER, NOW), 'deleted')
+
+  assert.deepEqual(db.deletedUsers, ['user-1'])
+  assert.deepEqual(db.loginAttempts, [{ email: 'someone.else@example.com' }], 'their login attempts (lowercase email) go too')
+})
+
+test('a database error is thrown, not hidden, and nobody is deleted', async () => {
+  await assert.rejects(requestDeletion(fakeDb({ failOn: 'profiles' }), USER, NOW), /boom/)
+  const db = fakeDb({ failOn: 'auth' })
+  await assert.rejects(requestDeletion(db, USER, NOW), /auth down/)
 })
 
 // ── POST /api/account/delete, with requireUser passed in
@@ -55,27 +105,29 @@ async function call(router) {
   }
 }
 
-const letIn = (req, _res, next) => ((req.user = { id: 'user-1' }), next())
+const letIn = (req, _res, next) => ((req.user = { id: 'user-1', email: 'shopper.one@example.com' }), next())
 const keepOut = (_req, res) => res.status(401).json({ error: 'Not logged in.', code: 'UNAUTHORIZED' })
 
-test('without a logged-in user it returns 401 and marks nothing', async () => {
-  let marked = false
-  const res = await call(createAccountRouter({ requireUser: keepOut, markDeletion: async () => (marked = true) }))
+test('without a logged-in user it returns 401 and does nothing', async () => {
+  let asked = false
+  const res = await call(createAccountRouter({ requireUser: keepOut, requestDelete: async () => ((asked = true), 'scheduled') }))
   assert.equal(res.status, 401)
-  assert.equal(marked, false)
+  assert.equal(asked, false)
 })
 
-test('marks the logged-in user and says it is scheduled', async () => {
+test('passes the logged-in user and answers with what happened', async () => {
   let askedFor
-  const res = await call(createAccountRouter({ requireUser: letIn, markDeletion: async (id) => (askedFor = id) }))
+  const res = await call(
+    createAccountRouter({ requireUser: letIn, requestDelete: async (user) => ((askedFor = user), 'deleted') }),
+  )
   assert.equal(res.status, 200)
-  assert.equal(askedFor, 'user-1')
-  assert.deepEqual(res.body, { status: 'scheduled' })
+  assert.deepEqual(askedFor, { id: 'user-1', email: 'shopper.one@example.com' })
+  assert.deepEqual(res.body, { status: 'deleted' })
 })
 
 test('GET is not allowed: deleting needs a POST', async () => {
   const app = express()
-  app.use('/api', createAccountRouter({ requireUser: letIn, markDeletion: async () => {} }))
+  app.use('/api', createAccountRouter({ requireUser: letIn, requestDelete: async () => 'scheduled' }))
   const server = app.listen(0)
   try {
     const res = await fetch(`http://127.0.0.1:${server.address().port}/api/account/delete`)
@@ -101,7 +153,7 @@ test('a failure returns the standard message without leaking details', async () 
   const res = await call(
     createAccountRouter({
       requireUser: letIn,
-      markDeletion: async () => {
+      requestDelete: async () => {
         throw new Error('column "secret" does not exist')
       },
     }),
