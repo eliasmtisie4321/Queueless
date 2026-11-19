@@ -1,10 +1,13 @@
 import { getBasket, saveBasket } from '../basketStore.js'
 import {
   OWNER_KEY,
+  PENDING_KEY,
   clearOnLogOut,
+  hasPendingChanges,
   loadAccountBasket,
   recordBasketSaving,
   saveAccountBasket,
+  saveBrowserBasket,
   syncOnLogIn,
 } from '../basketSync.js'
 
@@ -16,8 +19,8 @@ const SUGAR = '11111111-0000-4000-8000-000000000003'
  * A tiny in-memory stand-in for the Supabase tables the basket uses (baskets, basket_items),
  * with RLS-like behaviour left out: these tests are about what the client sends.
  */
-function fakeDb({ baskets = [], items = [] } = {}) {
-  const db = { baskets: [...baskets], items: [...items], rpcCalls: [], nextId: 1 }
+function fakeDb({ baskets = [], items = [], offline = false } = {}) {
+  const db = { baskets: [...baskets], items: [...items], rpcCalls: [], nextId: 1, offline }
 
   db.from = (table) => {
     const filters = []
@@ -28,6 +31,7 @@ function fakeDb({ baskets = [], items = [] } = {}) {
         kind === 'eq' ? row[col] === val : !val.includes(row[col]),
       )
     const run = () => {
+      if (db.offline) return { data: null, error: { message: 'Failed to fetch' } }
       const rows = table === 'baskets' ? db.baskets : db.items
       if (op === 'select') {
         const found = rows.filter(matches).map((b) => ({
@@ -201,14 +205,65 @@ describe('on log-in (plan §4.3)', () => {
   })
 })
 
-test('log out clears the browser basket and who it belonged to', () => {
+describe('changes that never reached the account (review of #49)', () => {
+  const account = () => ({
+    baskets: [{ id: 'b1', user_id: 'u1', title: 'My basket', is_active: true }],
+    items: [{ basket_id: 'b1', product_id: MILK, quantity: 1 }],
+  })
+
+  test('a failed save sets the pending flag; the next successful save clears it', async () => {
+    const db = fakeDb({ ...account(), offline: true })
+    saveBasket({ title: 'My basket', items: [{ productId: MILK, quantity: 1 }, { productId: BREAD, quantity: 1 }] })
+
+    await expect(saveBrowserBasket(db, 'u1', 'b1')).rejects.toThrow('Failed to fetch')
+    expect(hasPendingChanges()).toBe(true)
+
+    db.offline = false
+    await saveBrowserBasket(db, 'u1', 'b1')
+    expect(hasPendingChanges()).toBe(false)
+    expect(itemsOf(db, 'b1')).toEqual([[MILK, 1], [BREAD, 1]])
+  })
+
+  test('the train example: offline edits, then a reload, keeps the browser copy and saves it', async () => {
+    // Logged in earlier; three items added on the train while offline, so the save failed.
+    localStorage.setItem(OWNER_KEY, 'u1')
+    const db = fakeDb({ ...account(), offline: true })
+    saveBasket({
+      title: 'My basket',
+      items: [{ productId: MILK, quantity: 1 }, { productId: BREAD, quantity: 1 }, { productId: SUGAR, quantity: 2 }],
+    })
+    await expect(saveBrowserBasket(db, 'u1', 'b1')).rejects.toThrow()
+
+    // Signal is back and the page reloads: the account still has only the milk.
+    db.offline = false
+    await syncOnLogIn(db, 'u1')
+
+    expect(getBasket().items).toHaveLength(3)
+    expect(itemsOf(db, 'b1')).toEqual([[MILK, 1], [BREAD, 1], [SUGAR, 2]])
+    expect(localStorage.getItem(PENDING_KEY)).toBeNull()
+  })
+
+  test('without unsaved changes, the account copy still wins (it may have changed on another device)', async () => {
+    localStorage.setItem(OWNER_KEY, 'u1')
+    const db = fakeDb(account())
+    saveBasket({ title: 'My basket', items: [{ productId: SUGAR, quantity: 1 }] }) // an old copy
+
+    await syncOnLogIn(db, 'u1')
+
+    expect(getBasket().items).toEqual([{ productId: MILK, quantity: 1 }])
+  })
+})
+
+test('log out clears the browser basket, who it belonged to and the pending flag', () => {
   saveBasket({ title: 'Weekly shop', items: [{ productId: MILK, quantity: 1 }] })
   localStorage.setItem(OWNER_KEY, 'u1')
+  localStorage.setItem(PENDING_KEY, '1')
 
   clearOnLogOut()
 
   expect(getBasket().items).toEqual([])
   expect(localStorage.getItem(OWNER_KEY)).toBeNull()
+  expect(hasPendingChanges()).toBe(false)
 })
 
 test('recording a saving calls record_basket_saving with the basket id', async () => {

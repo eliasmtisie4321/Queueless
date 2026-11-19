@@ -3,9 +3,11 @@
 // working offline; this module copies it to and from Supabase.
 //
 //   log in   → guest basket: added into the account basket (quantities added), plan §4.3
-//              this user's basket: the account copy wins (it may have changed on another device)
+//              this user's basket: the account copy wins (it may have changed on another device),
+//                unless the browser has changes that never reached the account: then those win
 //              someone else's basket left in this browser: never mixed in, the account copy is used
-//   change   → saved to the account shortly after (debounced by the caller)
+//   change   → saved to the account shortly after (debounced by the caller). A failed save
+//              (offline, brief error) leaves a "pending" flag, so nothing is lost on reload
 //   log out  → the browser copy is cleared, so the next person doesn't see it
 //
 // Every function takes the Supabase client as `db`, so tests can pass a fake.
@@ -13,6 +15,8 @@ import { DEFAULT_TITLE, getBasket, mergeBaskets, saveBasket } from './basketStor
 
 /** Which account the browser basket belongs to. Missing = a guest basket. */
 export const OWNER_KEY = 'queueless.basket.owner'
+/** Set while the browser basket has changes that never reached the account (review of #49). */
+export const PENDING_KEY = 'queueless.basket.pending'
 
 const EMPTY = { title: DEFAULT_TITLE, items: [] }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -28,12 +32,27 @@ function readOwner() {
   }
 }
 
-function writeOwner(userId) {
+function writeKey(key, value) {
   try {
-    if (userId) localStorage.setItem(OWNER_KEY, userId)
-    else localStorage.removeItem(OWNER_KEY)
+    if (value) localStorage.setItem(key, value)
+    else localStorage.removeItem(key)
   } catch {
     // storage blocked (private mode): the basket still works, it just merges again next time
+  }
+}
+
+const writeOwner = (userId) => writeKey(OWNER_KEY, userId)
+const setPending = (pending) => writeKey(PENDING_KEY, pending ? '1' : null)
+
+/** A change made before the account copy could be loaded: keep it on the next sync. */
+export const markPendingChanges = () => setPending(true)
+
+/** True while the browser basket has changes the account doesn't have yet. */
+export function hasPendingChanges() {
+  try {
+    return localStorage.getItem(PENDING_KEY) === '1'
+  } catch {
+    return false
   }
 }
 
@@ -84,7 +103,22 @@ export async function saveAccountBasket(db, userId, basketId, basket) {
   return id
 }
 
-/** Runs once when a user is logged in (page load or log-in). Resolves the account basket id. */
+/**
+ * Saves the current browser basket to the account. If it fails, the pending flag is set, so the
+ * next sync keeps the browser copy instead of overwriting it; a success clears it.
+ */
+export async function saveBrowserBasket(db, userId, basketId) {
+  try {
+    const id = await saveAccountBasket(db, userId, basketId, getBasket())
+    setPending(false)
+    return id
+  } catch (error) {
+    setPending(true)
+    throw error
+  }
+}
+
+/** Runs when a user is logged in (page load, log-in, or a retry). Resolves the account basket id. */
 export async function syncOnLogIn(db, userId) {
   const owner = readOwner()
   const local = getBasket()
@@ -92,17 +126,20 @@ export async function syncOnLogIn(db, userId) {
 
   let next
   if (!owner) next = account ? mergeBaskets(account, local) : local // guest basket: add it in
-  else next = account ?? (owner === userId ? local : EMPTY) // never mix in another person's basket
+  else if (owner === userId) next = hasPendingChanges() || !account ? local : account // unsaved edits win
+  else next = account ?? EMPTY // never mix in another person's basket
 
   const id = await saveAccountBasket(db, userId, account?.id, next)
+  saveBasket({ title: next.title, items: next.items }) // first: listeners may react to it
   writeOwner(userId)
-  saveBasket({ title: next.title, items: next.items })
+  setPending(false) // the account now has exactly the browser copy
   return id
 }
 
 /** After log-out: clear the browser basket so the next person starts with an empty one. */
 export function clearOnLogOut() {
   writeOwner(null)
+  setPending(false)
   saveBasket(EMPTY)
 }
 

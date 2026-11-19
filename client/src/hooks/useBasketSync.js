@@ -1,18 +1,27 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from './useAuth.js'
-import { getBasket, subscribeBasket } from '../lib/basketStore.js'
-import { clearOnLogOut, saveAccountBasket, syncOnLogIn } from '../lib/basketSync.js'
+import { subscribeBasket } from '../lib/basketStore.js'
+import {
+  clearOnLogOut,
+  hasPendingChanges,
+  markPendingChanges,
+  saveBrowserBasket,
+  syncOnLogIn,
+} from '../lib/basketSync.js'
 import { supabase } from '../lib/supabase.js'
 
 const SAVE_DELAY_MS = 500
 
-// The latest account basket id, after any save in progress. S4 waits for it before recording a saving.
+// Every account write runs one after another on this chain, so two syncs can never race
+// (React StrictMode runs effects twice in development). It resolves the latest account basket id;
+// S4 waits for it before recording a saving.
 let ready = Promise.resolve(null)
 export const accountBasketReady = () => ready
 
 /**
  * Mounted once (AppShell). While someone is logged in, their basket is kept in their account;
  * on log-out the browser copy is cleared. Guests (or no Supabase) keep the localStorage basket only.
+ * A failed sync or save is retried on the next change and when the browser comes back online.
  */
 export function useBasketSync() {
   const { user, loading } = useAuth()
@@ -30,32 +39,47 @@ export function useBasketSync() {
     wasLoggedIn.current = true
 
     let cancelled = false
-    let timer
     let synced = false
-    const keepId = (lastId) => (error) => {
-      console.warn(`[basket] could not save the basket to the account: ${error.message}`)
-      return lastId
+    let timer
+
+    // Load/merge the account copy first; after that, each run saves the browser copy.
+    const run = () => {
+      ready = ready.then(async (lastId) => {
+        if (cancelled) return lastId
+        try {
+          if (!synced) {
+            const id = await syncOnLogIn(supabase, userId)
+            synced = true
+            return id
+          }
+          return await saveBrowserBasket(supabase, userId, lastId)
+        } catch (error) {
+          console.warn(`[basket] could not save the basket to the account: ${error.message}`)
+          return lastId
+        }
+      })
     }
 
-    ready = syncOnLogIn(supabase, userId)
-      .then((id) => {
-        synced = true
-        return id
-      })
-      .catch(keepId(null))
+    run()
 
     const unsubscribe = subscribeBasket(() => {
-      if (!synced || cancelled) return
+      if (cancelled) return
+      // Changed before the account copy loaded: make sure the next sync keeps this change.
+      if (!synced) markPendingChanges()
       clearTimeout(timer)
-      timer = setTimeout(() => {
-        ready = ready.then((id) => saveAccountBasket(supabase, userId, id, getBasket()).catch(keepId(id)))
-      }, SAVE_DELAY_MS)
+      timer = setTimeout(run, SAVE_DELAY_MS)
     })
+
+    const onOnline = () => {
+      if (!synced || hasPendingChanges()) run()
+    }
+    window.addEventListener('online', onOnline)
 
     return () => {
       cancelled = true
       clearTimeout(timer)
       unsubscribe()
+      window.removeEventListener('online', onOnline)
     }
   }, [userId, loading])
 }
