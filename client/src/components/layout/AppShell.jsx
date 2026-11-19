@@ -6,9 +6,11 @@ import Footer from './Footer.jsx'
 import OfflineBanner from '../feedback/OfflineBanner.jsx'
 import { SkeletonRows } from '../feedback/Skeleton.jsx'
 import { showsTabBar } from './navItems.js'
+import { useBasketSync } from '../../hooks/useBasketSync.js'
 
 /** Header, offline banner, page content, footer and (mobile) tab bar around every screen. */
 export default function AppShell() {
+  useBasketSync() // a logged-in shopper's basket lives in their account (#16)
   const { pathname } = useLocation()
   const tabBar = showsTabBar(pathname)
 
