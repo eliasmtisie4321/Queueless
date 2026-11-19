@@ -10,10 +10,10 @@
 
 | Resource       | Link                                                     |
 | -------------- | -------------------------------------------------------- |
-| Live app       | https://queueless-copilot.vercel.app/                                                |
+| Live app       | https://queueless-copilot.vercel.app/                    |
 | Stitch project | [Queueless on Stitch](https://stitch.withgoogle.com/projects/14854798444949179025) |
 | Project board  | [Queueless Board](https://github.com/users/mpho09/projects/1) |
-| Team Loom      | _TODO_                                                   |
+| Team Loom      | 🚧 Being recorded on the live link (link added here before the Final) |
 | PRD            | [docs/PRD.md](docs/PRD.md)                               |
 | Designs        | [docs/designs/](docs/designs/) (exported screens: `screen.png` + `code.html`) |
 | Implementation | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) |
@@ -29,27 +29,36 @@ We use the Product Requirements Document (PRD) as our single source of truth for
 
 | Name    | GitHub                                                       | Role(s)                        | Main features built |
 | ------- | ------------------------------------------------------------ | ------------------------------ | ------ |
-| Mpho    | [@mpho09](https://github.com/mpho09)                         | Tech Lead, Backend Dev         | _TODO_ |
-| Joy     | [@jjmolomo17-tech](https://github.com/jjmolomo17-tech)       | Product Owner, Frontend Dev    | _TODO_ |
-| Refilwe | [@Ref-DevSa](https://github.com/Ref-DevSa)                   | Frontend Dev, Designer         | _TODO_ |
-| Elias   | [@eliasmtisie4321](https://github.com/eliasmtisie4321)       | QA, DevOps                     | _TODO_ |
-| Kabelo  | [@kabelomathapo6-lab](https://github.com/kabelomathapo6-lab) | Designer, Frontend Dev         | _TODO_ |
+| Mpho    | [@mpho09](https://github.com/mpho09)                         | Tech Lead, Backend Dev         | Database schema, RLS, seed and RLS tests (#25); Search Results S2 + `search_products()` (#34); live-site sample-data guard (#42) |
+| Joy     | [@jjmolomo17-tech](https://github.com/jjmolomo17-tech)       | Product Owner, Frontend Dev    | Suburb selector on Home (#27) |
+| Refilwe | [@Ref-DevSa](https://github.com/Ref-DevSa)                   | Frontend Dev, Designer         | Frontend foundation + Home S1 (#22); Basket S4 + BR3 totals (#23); Savings S6, savings API, price-drop job, email helper (#28–#33) |
+| Elias   | [@eliasmtisie4321](https://github.com/eliasmtisie4321)       | QA, DevOps                     | Report Submission S5 + Stores list + report rules (#35); Vercel deployment (#37) |
+| Kabelo  | [@kabelomathapo6-lab](https://github.com/kabelomathapo6-lab) | Designer, Frontend Dev         | "Midnight Lagoon" dark design (#36); auth helpers `requireUser`, `useAuth`, `authStore` (#41) |
 
 ## ✨ Features
 
-Status key: ✅ done · 🚧 in progress
+Status key: ✅ done · 🚧 in progress · ⏸️ cut / deferred
 
 ### Must have
 
-| Feature | Status | Owner  |
-| ------- | ------ | ------ |
-| _TODO_  | 🚧     | _TODO_ |
+| Feature | Status | Owner |
+| ------- | ------ | ----- |
+| Accounts: log in, sign up, reset, verify (A1–A4, #14) | 🚧 Auth helpers merged (#41); Login/Sign up screens in progress | Kabelo, Mpho |
+| F1 Product search & price compare (S2, #11) | ✅ | Mpho |
+| F1 Store Details with queue status (S3, #12) | 🚧 Placeholder screen on `main` | Kabelo |
+| F2 Cross-store basket (S4, #16) | ✅ Guest basket in localStorage | Refilwe |
+| F3 Queue/stock report submission (S5, #18) | ✅ Needs log-in to submit | Elias |
+| Database: schema, RLS, seed (#8) | ✅ | Mpho |
 
 ### Should have
 
-| Feature | Status | Owner  |
-| ------- | ------ | ------ |
-| _TODO_  | 🚧     | _TODO_ |
+| Feature | Status | Owner |
+| ------- | ------ | ----- |
+| F4 Suburb filter (#19) | ✅ Selector on Home and Search | Joy |
+| F5 Savings dashboard + savings API (S6, #20) | ✅ Screen and `/api/me/savings`; needs log-in | Refilwe |
+| Price-drop email job (#20) | 🚧 Built and tested, not scheduled yet | Refilwe |
+| Per-account lockout (D11) | ⏸️ Cut; Supabase Auth's built-in rate limiting is used | — |
+| Admin / Retailer dashboards (Feature 7) | ⏸️ Deferred (D10) | — |
 
 ## 🧱 Tech Stack & Architecture
 
@@ -161,21 +170,28 @@ npm run dev          # starts the client (http://localhost:5173) and the API (ht
 
 > ⚠️ These are **test accounts only**, created by `supabase/seed.sql`. Never put real credentials here.
 
-| Role   | Email  | Password |
-| ------ | ------ | -------- |
-| _TODO_ | _TODO_ | _TODO_   |
+Test accounts are created on the hosted Supabase project once sign-up is live (#13, #14). **Passwords are never committed to this public repo.** Ask the Tech Lead for them privately, or create your own account on the live site.
+
+| Role    | Email                         | Password            |
+| ------- | ----------------------------- | ------------------- |
+| Shopper | `tester.joy@queueless.co.za`  | shared privately    |
+| Shopper | `mpho.dev@queueless.co.za`    | shared privately    |
 
 ## 🧪 Tests
 
-_TODO: no test suite yet._
+Jest 29 in both workspaces, plus SQL tests for the database.
 
 ```bash
-# TODO: npm test
+npm test          # all client and server tests (180+ tests)
+npm run db:test   # database tests in supabase/tests/ against the hosted project
 ```
 
-| Area   | What's covered |
-| ------ | -------------- |
-| _TODO_ | _TODO_         |
+| Area | What's covered |
+| ---- | -------------- |
+| Client screens | Home, Search Results, Basket, Savings, Report Submission, Stores list, Suburb selector, Store placeholder |
+| Client logic | BR3 basket totals, basket store, price age, distance, validation, formatting, `data.js` live/dev sample-data rules, search API, auth store and `useAuth` |
+| Server | `GET /api/me/savings`, `requireUser` middleware |
+| Database (`supabase/tests/`) | RLS rules, report rules (throttling, verification), savings events, `search_products()` |
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every pull request and push to `main`. It checks for leftover merge conflict markers and invalid JSON files.
 
@@ -183,9 +199,18 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every pull req
 
 | Part     | Hosted on | Redeploys when |
 | -------- | --------- | -------------- |
-| Frontend | _TODO_    | _TODO_         |
-| API      | _TODO_    | _TODO_         |
-| Database | Supabase  | Migrations pushed with `npm run db:push` _(TODO: confirm process)_ |
+| Frontend | Vercel (static build of `client/dist`) | Every merge to `main` |
+| API      | Vercel serverless function ([api/index.js](api/index.js) → `server/src/app.js`) | Every merge to `main` |
+| Database | Supabase (hosted) | Tech Lead runs `npm run db:push` after a migration PR is merged |
+
+Vercel settings live in [vercel.json](vercel.json). The project needs these **Environment Variables** in Vercel (Production and Preview):
+
+| Variable | Used by |
+| --- | --- |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Client. Baked in at **build** time, so redeploy after changing them |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | API (server only) |
+
+Check the deployment: `https://queueless-copilot.vercel.app/api/health` should return `"database":"configured"`, and Home should make requests to `*.supabase.co` in the browser's Network tab.
 
 ## 📸 Screenshots
 
@@ -200,39 +225,46 @@ Design: "Midnight Lagoon" (see [docs/DESIGN_REFRESH.md](docs/DESIGN_REFRESH.md))
 
 ### Known issues
 
-- _TODO_
+- Log-in and Sign up screens are not merged yet (#14), so Reports, Savings and saved baskets can't be used on the live site.
+- Store Details (S3) is still a placeholder (#12).
+- The basket is saved in the browser (localStorage) only, not to the account.
+- The price-drop email job is built and tested but not scheduled.
+- CI on `main` only checks for merge conflict markers and valid JSON; real CI (lint, typecheck, test, build) is in PR #38.
 
 ### What we'd build next
 
 - 3D experience with Three.js (planned for a later stage)
-- _TODO_
+- Save baskets to the account and schedule the price-drop emails
+- Admin and Retailer dashboards (Feature 7)
 
 ## 🤝 How We Work
 
 ### Branch naming
 
-_TODO: confirm the convention._ Suggested:
+Branches start with the type and the Issue number. Commits use `type: summary (#N)`.
 
 | Type     | Pattern                     | Example                    |
 | -------- | --------------------------- | -------------------------- |
-| Feature  | `feature/<short-name>`      | `feature/join-queue`       |
-| Bug fix  | `fix/<short-name>`          | `fix/login-redirect`       |
-| Chore    | `chore/<short-name>`        | `chore/update-deps`        |
+| Feature  | `feature/<issue>-<name>`    | `feature/14-auth-core`     |
+| Bug fix  | `fix/<issue>-<name>`        | `fix/20-savings-limits`    |
+| Docs     | `docs/<issue>-<name>`       | `docs/21-readme`           |
+| Chore    | `chore/<name>`              | `chore/update-deps`        |
+
+Each person's screens live in their own folder, `client/src/screens/<name>/`, so individual work is visible.
 
 ### Pull request rules
 
-_TODO: confirm the rules._ Suggested:
-
 - Never push directly to `main`. All changes go through a pull request.
 - Keep PRs small and focused on one feature or fix.
-- Link the related Issue (`Closes #12`) so its card on the [project board](https://github.com/users/mpho09/projects/1) moves to Done.
+- Link the related Issue (`Closes #12`) so its card on the [project board](https://github.com/users/mpho09/projects/1) moves to Done. **Issues are only closed by a merged PR**, never by hand.
+- Tests go in the same PR as the feature.
 - CI must pass before merging.
 - Include screenshots for UI changes.
 
 ### Review process
 
-_TODO: confirm the process._ Suggested:
-
 - At least **one approval** from another team member before merging.
 - The reviewer checks that the code works locally, matches the designs, and does not commit secrets.
+- Reviewers request changes when something is wrong, and the author pushes fix commits in response.
+- For deployment changes, the reviewer clicks through search and log-in on the live link and writes down what they saw.
 - The PR author merges once approved and deletes the branch afterwards.

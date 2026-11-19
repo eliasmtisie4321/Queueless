@@ -67,7 +67,7 @@
 | **Email or phone verification** | Required via email link. Accounts remain restricted to read-only guest status before verification. |
 | **Password rules** | Minimum 8 characters, including at least 1 uppercase letter and 1 number. Show/hide toggle icon included. |
 | **Forgot password** | "Forgot password?" link sends a secure reset link via email, valid for exactly 1 hour. |
-| **Failed log-in attempts** | Account is temporarily locked for 15 minutes after 5 consecutive incorrect password entries. |
+| **Failed log-in attempts** | Shows `Incorrect email or password.` Supabase Auth's built-in rate limiting applies. *(Per-account 15-minute lockout cut from scope on 19 Nov 2026, see Implementation Plan D11.)* |
 | **Stay logged in** | Session remains active for 30 days before requiring a manual password sign-in re-check. |
 | **Log out** | Accessible from S6 Profile menu tray; log out is immediate with a single tap confirmation pop-up. |
 | **Delete account** | Triggered in user settings; permanently deletes profile, email logs, and saved baskets within 7 days. |
@@ -248,9 +248,7 @@ flowchart TD
 
 ### 10.4 Reference and seed data
 * **Reference Data**: Global suburb catalogs mapping localized South African municipal nodes (e.g. "Hatfield", "Arcadia", "Benoni") must exist before student registration tasks open. Managed cleanly by structural administrators natively inside production storage layers.
-* **Seed Testing Profiles**: 
-  * Shopper Account: `tester.joy@queueless.co.za` $\rightarrow$ Password string: `JoyPass2026!`.
-  * Developer Backend Account: `mpho.dev@queueless.co.za` $\rightarrow$ Password string: `MphoLeadBackend2026#`.
+* **Seed Testing Profiles**: Test accounts are listed in the README (Test Logins). Passwords are never stored in this repository; they are shared privately by the Tech Lead.
 
 ---
 
@@ -392,51 +390,6 @@ Queueless processes and stores user data tokens in accordance with South Africa'
 | **M5: Tested and demoed**| Quality tracking matrices pass manual inspection checklist steps, concluding final deliverable audits. | Testing checklist link | 22 Jan 2027 |
 
 ---
-
-## 14. Using your PRD with AI
-
-### Step 0: Style guide first (in your AI design tool)
-*Paste Section 9 and Section 8.3, then run this prompt:*
-```text
-You are a senior UI designer. Using ONLY the design values and shared components I pasted, create a one-page style guide for my app "Queueless": colour swatches with hex codes, the text sizes, spacing, buttons (primary, secondary, danger, disabled), text fields (normal, focused, error), cards, header, tab bar or menu, toast, offline banner and empty-state block. Do not design any app screens yet. Do not add colours, fonts or components I did not list.
-```
-
-### Step 1: Generate screens, one at a time
-*Paste Sections 2.1, 8.1, 8.4, 9, and the specific 8.2 spec for the target screen, then run this prompt:*
-```text
-You are a senior UI/UX designer. Design screen "[S# Screen name]" for my web app at 360 px responsive mobile width and 1200 px desktop layout wide frames.
-- Reuse the style guide and shared components exactly. Keep the header and tab bar identical to my other screens.
-- Include every element in the order listed in the spec. Use the exact labels, placeholder text and messages in quotation marks.
-- Fill the screen with the sample content given. Use South African names, places, rand and dates. Never use lorem ipsum.
-- Design the Normal state first, then one extra frame for each other state in the spec (Empty, Loading, Error, Offline, Success).
-- Do not invent features, buttons, screens or text. If something you need is missing, put a grey box labelled "TODO: [what is missing]" and list all TODOs under the design.
-```
-
-### Step 2: Generate MASTER.md (in a chat AI that accepts files, e.g. Claude)
-*Attach your whole PRD and links to your final screens, then run this prompt:*
-```text
-You are a senior software engineer. Using the attached PRD, write MASTER.md: the build plan an AI coding assistant will follow to build this app from an empty folder. Use the PRD's IDs (F#, BR#, US#, S#, M#, T-…) everywhere. Include, in this order:
-1. Summary and scope: product, users, Must and Should features, non-goals, and a "Deferred" list of future features that must NOT be built.
-
-
-
-2. Tech stack with versions, folder structure, and exact setup and install commands.
-3. .env.example with every variable from Section 11.5, marked public or secret.
-4. Database: every entity, field, type, default, uniqueness rule, delete behaviour, relationship and status change from Section 10, written as migration steps.
-5. Permissions: one rule per row of Section 11.4, enforced in the database or server.
-6. Business rules: every BR# with step-by-step logic (pseudocode), and where it runs.
-7. Accounts: every decision in Section 5.
-8. Navigation: every screen and route from Sections 7.2 and 8.1, and which ones show the tab bar.
-9. Design tokens: every value in Section 9 as named tokens; shared components from 8.3.
-10. Notifications (4.5), error messages (12.2), and quality, security and privacy rules (12).
-11. Seed data and test accounts from Section 10.4.
-12. Build phases:
-• Phase 1 is always: setup, folder structure, tokens, .env.example, database and seed data, and one screen that runs.
-• Each later phase covers 1 or 2 features, all Must before any Should, and ends with an app that runs.
-• Each phase lists its F#, US#, S# and BR#, the files to create, and a Definition of Done made of the T- criteria it covers, as checkboxes.
-13. Testing checklist: every T- criterion as a checkbox, marked manual or automated.
-Rules: do not add anything that is not in the PRD. If the PRD is unclear or contradicts itself, list it under "Clarifications needed" at the top and STOP: do not write the build phases until I answer. State at the top: "Built from PRD version [vX.X]".
-```
 
 ## 3. Goals, success metrics and non-goals
 
