@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import GlobalHeader from '../../../components/layout/GlobalHeader.jsx'
@@ -37,7 +37,7 @@ const VERIFIED = {
 
 function renderApp(path) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const tree = () => (
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <GlobalHeader />
@@ -46,8 +46,10 @@ function renderApp(path) {
           <Route path="*" element={<p>Home</p>} />
         </Routes>
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree())
+  return { ...view, rerenderApp: () => view.rerender(tree()) } // same cache, as in one browser tab
 }
 
 beforeEach(() => {
@@ -74,6 +76,22 @@ test('no unread notifications: no dot', async () => {
   renderApp('/')
   expect(await screen.findByRole('link', { name: 'Your profile and savings' })).toBeInTheDocument()
   expect(screen.queryByTestId('unread-dot')).not.toBeInTheDocument()
+})
+
+test("after another user logs in on the same tab, the previous user's dot is never shown (review of #50)", async () => {
+  mockUnread = [VERIFIED] // user u1's
+  const { rerenderApp } = renderApp('/')
+  expect(await screen.findByTestId('unread-dot')).toBeInTheDocument()
+
+  // u1 logs out, u2 logs in. u2's request hasn't answered yet.
+  let answer
+  mockUnread = new Promise((resolve) => (answer = resolve))
+  mockAuth = { user: { id: 'u2' }, isLoggedIn: true, loading: false }
+  rerenderApp()
+
+  expect(screen.queryByTestId('unread-dot')).not.toBeInTheDocument() // not u1's cached one
+  await act(async () => answer([]))
+  expect(screen.getByRole('link', { name: 'Your profile and savings' })).toBeInTheDocument()
 })
 
 test('a guest never asks for notifications', async () => {

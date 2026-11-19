@@ -11,12 +11,15 @@ const CHECK_EVERY_MS = 60_000
  * `markRead(ids)` marks them read and drops them from the list straight away.
  */
 export function useNotifications() {
-  const { isLoggedIn } = useAuth()
+  const { user, isLoggedIn } = useAuth()
   const enabled = Boolean(supabase) && isLoggedIn
   const queryClient = useQueryClient()
+  // Keyed by user, so after a log-out and a different log-in in the same tab, the new user never
+  // sees the previous user's cached messages (review of #50).
+  const userId = user?.id ?? null
 
   const query = useQuery({
-    queryKey: ['notifications'],
+    queryKey: ['notifications', userId],
     queryFn: () => fetchUnreadNotifications(),
     enabled,
     refetchInterval: enabled ? CHECK_EVERY_MS : false,
@@ -24,10 +27,10 @@ export function useNotifications() {
 
   const markRead = useCallback(
     async (ids) => {
-      queryClient.setQueryData(['notifications'], (list = []) => list.filter((n) => !ids.includes(n.id)))
+      queryClient.setQueryData(['notifications', userId], (list = []) => list.filter((n) => !ids.includes(n.id)))
       await markNotificationsRead(ids)
     },
-    [queryClient],
+    [queryClient, userId],
   )
 
   return { unread: enabled ? (query.data ?? []) : [], markRead }

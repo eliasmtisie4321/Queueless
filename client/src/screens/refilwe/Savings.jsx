@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { CircleDollarSign, LogOut, Settings, Shield, TriangleAlert } from 'lucide-react'
@@ -55,6 +55,12 @@ export default function Savings() {
   // so the header dot clears and the toast doesn't come back.
   const { unread, markRead } = useNotifications()
   const [notice, setNotice] = useState(null)
+  // Same element until the notice changes, so a re-render (refetch, going offline) doesn't
+  // restart the toast's 6 s timer (review of #50).
+  const noticeMessage = useMemo(
+    () => notice && <NotificationMessage body={notice.body} more={notice.more} />,
+    [notice],
+  )
   const closeNotice = useCallback(() => setNotice(null), [])
   const loaded = savings.isSuccess
   useEffect(() => {
@@ -197,7 +203,7 @@ export default function Savings() {
         <Toast message={error} tone="error" onClose={closeError} />
       ) : (
         <Toast
-          message={notice && <NotificationMessage body={notice.body} more={notice.more} />}
+          message={noticeMessage}
           onClose={closeNotice}
           duration={NOTICE_MS}
         />
