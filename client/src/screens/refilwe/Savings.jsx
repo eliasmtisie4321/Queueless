@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, Navigate, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { CircleDollarSign, LogOut, Settings, Shield, TriangleAlert } from 'lucide-react'
 import Button from '../../components/ui/Button.jsx'
@@ -7,8 +7,10 @@ import Card from '../../components/ui/Card.jsx'
 import ErrorState from '../../components/feedback/ErrorState.jsx'
 import { Skeleton } from '../../components/feedback/Skeleton.jsx'
 import Toast from '../../components/feedback/Toast.jsx'
+import { useAuth } from '../../hooks/useAuth.js'
 import { useOnline } from '../../hooks/useOnline.js'
 import { messages } from '../../lib/messages.js'
+import { supabase } from '../../lib/supabase.js'
 import AccountSettings from './AccountSettings.jsx'
 import Dialog from './Dialog.jsx'
 import ProfileCard from './ProfileCard.jsx'
@@ -16,9 +18,13 @@ import RecentActivity from './RecentActivity.jsx'
 import SavingsChart from './SavingsChart.jsx'
 import { SavedThisMonth, StatTile } from './SavingsSummary.jsx'
 import { deleteAccount, logOut } from './savingsApi.js'
+import { NotificationMessage } from './NotificationMessage.jsx'
+import { useNotifications } from './useNotifications.js'
 import { isNewUser } from './savingsFormat.js'
 import { savingsText } from './savingsText.js'
 import { useSavings } from './useSavings.js'
+
+const NOTICE_MS = 6000 // long enough to read the verified-report message
 
 const menuItem =
   'flex min-h-12 w-full items-center gap-3 rounded-button border border-border-strong px-4 text-left text-body text-ink transition-colors hover:bg-surface-raised'
@@ -26,9 +32,15 @@ const menuItem =
 /**
  * S6 Savings Analytics Dashboard (#20): profile, saved this month, points, reports,
  * 4-month chart, recent activity and account settings (log out, delete account).
+ * Logged-in users only: a guest is sent to Log in (A1) and comes back here afterwards.
  */
 export default function Savings() {
-  const savings = useSavings()
+  const auth = useAuth()
+  // Without Supabase (development only) S6 shows the sample shopper, so there is nobody to log in.
+  const authOn = Boolean(supabase)
+  const savings = useSavings({ enabled: !authOn || auth.isLoggedIn })
+  // Set while logging out or deleting, so the guest redirect doesn't win over "go to Home".
+  const leaving = useRef(false)
   const online = useOnline()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -39,19 +51,47 @@ export default function Savings() {
   const closeDialog = useCallback(() => setDialog(null), [])
   const closeError = useCallback(() => setError(null), [])
 
+  // "Report verified" (PRD §4.5): show the newest unread one as the S6 toast, then mark them all read
+  // so the header dot clears and the toast doesn't come back.
+  const { unread, markRead } = useNotifications()
+  const [notice, setNotice] = useState(null)
+  // Same element until the notice changes, so a re-render (refetch, going offline) doesn't
+  // restart the toast's 6 s timer (review of #50).
+  const noticeMessage = useMemo(
+    () => notice && <NotificationMessage body={notice.body} more={notice.more} />,
+    [notice],
+  )
+  const closeNotice = useCallback(() => setNotice(null), [])
+  const loaded = savings.isSuccess
+  useEffect(() => {
+    if (!loaded || unread.length === 0) return
+    setNotice({ body: unread[0].body, more: unread.length - 1 })
+    markRead(unread.map((n) => n.id)).catch((e) => console.warn(`[notifications] could not mark read: ${e.message}`))
+  }, [loaded, unread, markRead])
+
   async function run(action) {
     setBusy(true)
     setError(null)
+    leaving.current = true
     try {
       await action()
       setDialog(null)
       queryClient.removeQueries({ queryKey: ['savings'] })
       navigate('/')
     } catch (e) {
+      leaving.current = false
       setDialog(null)
       setError(e?.message || messages.serverError)
     } finally {
       setBusy(false)
+    }
+  }
+
+  if (authOn && !leaving.current) {
+    const toLogin = { from: '/savings' }
+    if (!auth.loading && !auth.isLoggedIn) return <Navigate to="/login" replace state={toLogin} />
+    if (savings.error?.status === 401) {
+      return <Navigate to="/login" replace state={{ ...toLogin, message: messages.sessionExpired }} />
     }
   }
 
@@ -159,7 +199,15 @@ export default function Savings() {
         </Dialog>
       )}
 
-      <Toast message={error} tone="error" onClose={closeError} />
+      {error ? (
+        <Toast message={error} tone="error" onClose={closeError} />
+      ) : (
+        <Toast
+          message={noticeMessage}
+          onClose={closeNotice}
+          duration={NOTICE_MS}
+        />
+      )}
     </div>
   )
 }
