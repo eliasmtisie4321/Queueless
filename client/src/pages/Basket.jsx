@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CircleCheck, Pencil, ShoppingBasket, Trash2 } from 'lucide-react'
 import Button from '../components/ui/Button.jsx'
@@ -7,15 +7,22 @@ import QuantityStepper from '../components/ui/QuantityStepper.jsx'
 import StoreComparisonCard from '../components/domain/StoreComparisonCard.jsx'
 import ErrorState from '../components/feedback/ErrorState.jsx'
 import { SkeletonRows } from '../components/feedback/Skeleton.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { useBasket } from '../hooks/useBasket.js'
+import { accountBasketReady } from '../hooks/useBasketSync.js'
 import { useOnline } from '../hooks/useOnline.js'
+import { recordBasketSaving } from '../lib/basketSync.js'
 import { fetchBasketPrices } from '../lib/data.js'
+import { supabase } from '../lib/supabase.js'
 import { formatTime, formatZAR } from '../lib/format.js'
 import { messages } from '../lib/messages.js'
 import { basketTotals, chainName } from '../utils/basketTotals.js'
 
 const iconButton =
   'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-raised hover:text-ink disabled:cursor-not-allowed disabled:text-muted/40 disabled:hover:bg-transparent'
+
+// Longer than the basket save delay (hooks/useBasketSync.js), so the latest items are saved first.
+const RECORD_DELAY_MS = 1000
 
 const itemsLabel = (n) => `${n} ${n === 1 ? 'item' : 'items'}`
 
@@ -37,6 +44,27 @@ export default function Basket() {
     [basket.items, prices.data],
   )
   const products = useMemo(() => new Map((prices.data?.products ?? []).map((p) => [p.id, p])), [prices.data])
+
+  // Logged in and there's a saving: log it for S6 (#20) once the basket is saved to the account.
+  // Silent on purpose: the database logs at most one per day, so S4 never says "saving recorded".
+  const { isLoggedIn } = useAuth()
+  const saving = totals?.saving ?? 0
+  useEffect(() => {
+    if (!supabase || !isLoggedIn || !online || saving <= 0) return undefined
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const basketId = await accountBasketReady()
+        if (basketId && !cancelled) await recordBasketSaving(supabase, basketId)
+      } catch (error) {
+        console.warn(`[basket] could not record the saving: ${error.message}`)
+      }
+    }, RECORD_DELAY_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [isLoggedIn, online, saving, basket.items])
   const cachedAt = online ? null : formatTime(prices.dataUpdatedAt || Date.now())
 
   const count = basket.items.length
