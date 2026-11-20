@@ -3,11 +3,15 @@ import { act, render, screen } from '@testing-library/react'
 // The Jest stub for lib/supabase.js has no client; give this test a fake one.
 let mockChange = () => {}
 let mockSession = null
+// getSession waits until the test calls this, like the network round trip in the real app.
+let mockFinishSession = () => {}
 jest.mock('../lib/supabase.js', () => ({
   isDev: true,
   supabase: {
     auth: {
-      getSession: () => Promise.resolve({ data: { session: mockSession } }),
+      getSession: () => new Promise((resolve) => {
+        mockFinishSession = () => resolve({ data: { session: mockSession } })
+      }),
       onAuthStateChange: (cb) => {
         mockChange = cb
         return { data: { subscription: { unsubscribe() {} } } }
@@ -31,6 +35,7 @@ function Who() {
 test('shows loading, then the guest, then the user after a log-in event, then the guest again', async () => {
   render(<Who />)
   expect(screen.getByText('Checking…')).toBeInTheDocument()
+  await act(async () => mockFinishSession())
   expect(await screen.findByText('Guest')).toBeInTheDocument()
 
   act(() => mockChange('SIGNED_IN', { user: { id: 'u1', email: 'joy@example.com' } }))
@@ -40,12 +45,12 @@ test('shows loading, then the guest, then the user after a log-in event, then th
   expect(screen.getByText('Guest')).toBeInTheDocument()
 })
 
-test('exposes the four account actions', () => {
+test('exposes the account actions', () => {
   let auth
   function Grab() {
     auth = useAuth()
     return null
   }
   render(<Grab />)
-  for (const name of ['signUp', 'logIn', 'logOut', 'resetPassword']) expect(typeof auth[name]).toBe('function')
+  for (const name of ['signUp', 'logIn', 'logOut', 'resendVerification', 'resetPassword', 'updatePassword']) expect(typeof auth[name]).toBe('function')
 })
