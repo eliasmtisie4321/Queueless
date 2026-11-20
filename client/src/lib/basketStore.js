@@ -1,7 +1,6 @@
-// The shopper's basket. Guests keep it in localStorage under `queueless.basket`
-// (docs/Implementation plan.md §4.3). Saving it to the `baskets` table for
-// logged-in users, and merging the guest basket on log-in, comes with accounts (#13):
-// use `mergeBaskets` for that.
+// The shopper's basket, kept in localStorage under `queueless.basket` (plan §4.3).
+// Every screen reads this copy. For logged-in users, lib/basketSync.js also keeps it in the
+// `baskets` table and merges the guest basket in on log-in (with `mergeBaskets`).
 
 export const BASKET_KEY = 'queueless.basket'
 export const DEFAULT_TITLE = 'My basket'
